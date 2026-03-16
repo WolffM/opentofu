@@ -138,6 +138,51 @@ func TestRenderHuman_Imports(t *testing.T) {
 OpenTofu will perform the following actions:
 
   # test_resource.resource will be imported
+  # (imported from "1D5F5E9E-F2E5-401B-9ED5-692A215AC67E")
+
+    resource "test_resource" "resource" {
+        id    = "1D5F5E9E-F2E5-401B-9ED5-692A215AC67E"
+        value = "Hello, World!"
+    }
+
+Plan: 1 to import, 0 to add, 0 to change, 0 to destroy.
+`,
+		},
+		"simple_import_with_identity": {
+			plan: Plan{
+				ResourceChanges: []jsonplan.ResourceChange{
+					{
+						Address:      "test_resource.resource",
+						Mode:         "managed",
+						Type:         "test_resource",
+						Name:         "resource",
+						ProviderName: "test",
+						Change: jsonplan.Change{
+							Actions: []string{"no-op"},
+							Before: marshalJson(t, map[string]interface{}{
+								"id":    "1D5F5E9E-F2E5-401B-9ED5-692A215AC67E",
+								"value": "Hello, World!",
+							}),
+							After: marshalJson(t, map[string]interface{}{
+								"id":    "1D5F5E9E-F2E5-401B-9ED5-692A215AC67E",
+								"value": "Hello, World!",
+							}),
+							Importing: &jsonplan.Importing{
+								Identity: marshalJson(t, map[string]interface{}{
+									"name": "my-resource",
+								}),
+							},
+						},
+					},
+				},
+			},
+			output: `
+OpenTofu will perform the following actions:
+
+  # test_resource.resource will be imported
+  # imported using resource identity: {
+  #   "name": "my-resource"
+  # }
     resource "test_resource" "resource" {
         id    = "1D5F5E9E-F2E5-401B-9ED5-692A215AC67E"
         value = "Hello, World!"
@@ -181,6 +226,7 @@ OpenTofu will perform the following actions:
 
   # test_resource.resource will be imported
   # (config will be generated)
+  # (imported from "1D5F5E9E-F2E5-401B-9ED5-692A215AC67E")
     resource "test_resource" "resource" {
         id    = "1D5F5E9E-F2E5-401B-9ED5-692A215AC67E"
         value = "Hello, World!"
@@ -4456,7 +4502,8 @@ func TestResourceChange_nestedMap(t *testing.T) {
 			}),
 			AfterValMarks: []cty.PathValueMarks{
 				{
-					Path: cty.Path{cty.GetAttrStep{Name: "disks"},
+					Path: cty.Path{
+						cty.GetAttrStep{Name: "disks"},
 						cty.IndexStep{Key: cty.StringVal("disk_a")},
 						cty.GetAttrStep{Name: "mount_point"},
 					},
@@ -7542,7 +7589,7 @@ func outputChange(name string, before, after cty.Value, sensitive bool) *plans.O
 
 // A basic test schema using a configurable NestingMode for one (NestedType) attribute and one block
 func testSchema(nesting configschema.NestingMode) *configschema.Block {
-	var diskKey = "disks"
+	diskKey := "disks"
 	if nesting == configschema.NestingSingle {
 		diskKey = "disk"
 	}
@@ -7645,7 +7692,7 @@ func testSchemaMultipleBlocks(nesting configschema.NestingMode) *configschema.Bl
 
 // similar to testSchema with the addition of a "new_field" block
 func testSchemaPlus(nesting configschema.NestingMode) *configschema.Block {
-	var diskKey = "disks"
+	diskKey := "disks"
 	if nesting == configschema.NestingSingle {
 		diskKey = "disk"
 	}
