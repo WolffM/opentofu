@@ -73,9 +73,11 @@ func TestUserAgentAppendViaEnvVar(t *testing.T) {
 	}
 }
 func TestCustomUserAgentViaEnvVarIgnored(t *testing.T) {
-	// OPENTOFU_USER_AGENT is an undocumented variable that was removed.
+	// removedCustomUAEnvVar was an undocumented variable that was removed.
 	// Verify that setting it has no effect on the User-Agent string.
-	t.Setenv("OPENTOFU_USER_AGENT", "custom/agent")
+	const removedCustomUAEnvVar = "OPENTOFU_USER_AGENT"
+	t.Setenv(removedCustomUAEnvVar, "custom/agent")
+	t.Setenv(appendUaEnvVar, "")
 	expected := fmt.Sprintf("%s/%s", DefaultApplicationName, "0.0.0")
 	actual := OpenTofuUserAgent("0.0.0")
 	if actual != expected {
