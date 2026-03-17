@@ -125,6 +125,17 @@ type MockProvider struct {
 	CallFunctionRequest  providers.CallFunctionRequest
 	CallFunctionFn       func(providers.CallFunctionRequest) providers.CallFunctionResponse
 
+	ValidateListResourceConfigCalled   bool
+	ValidateListResourceConfigTypeName string
+	ValidateListResourceConfigResponse *providers.ValidateListResourceConfigResponse
+	ValidateListResourceConfigRequest  providers.ValidateListResourceConfigRequest
+	ValidateListResourceConfigFn       func(providers.ValidateListResourceConfigRequest) providers.ValidateListResourceConfigResponse
+
+	ListResourceCalled   bool
+	ListResourceResponse *providers.ListResourceResponse
+	ListResourceRequest  providers.ListResourceRequest
+	ListResourceFn       func(providers.ListResourceRequest) providers.ListResourceResponse
+
 	CloseCalled bool
 	CloseError  error
 }
@@ -766,4 +777,41 @@ func (p *MockProvider) Close(ctx context.Context) error {
 
 	p.CloseCalled = true
 	return p.CloseError
+}
+
+func (p *MockProvider) ValidateListResourceConfig(ctx context.Context, r providers.ValidateListResourceConfigRequest) (resp providers.ValidateListResourceConfigResponse) {
+	p.Lock()
+	defer p.Unlock()
+
+	p.ValidateListResourceConfigCalled = true
+	p.ValidateListResourceConfigRequest = r
+	p.ValidateListResourceConfigTypeName = r.TypeName
+
+	if p.ValidateListResourceConfigFn != nil {
+		return p.ValidateListResourceConfigFn(r)
+	}
+
+	if p.ValidateListResourceConfigResponse != nil {
+		return *p.ValidateListResourceConfigResponse
+	}
+
+	return resp
+}
+
+func (p *MockProvider) ListResource(ctx context.Context, r providers.ListResourceRequest) (resp providers.ListResourceResponse) {
+	p.Lock()
+	defer p.Unlock()
+
+	p.ListResourceCalled = true
+	p.ListResourceRequest = r
+
+	if p.ListResourceFn != nil {
+		return p.ListResourceFn(r)
+	}
+
+	if p.ListResourceResponse != nil {
+		return *p.ListResourceResponse
+	}
+
+	return resp
 }

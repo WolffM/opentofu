@@ -31,6 +31,9 @@ func (ss ProviderSchema) SchemaForResourceType(mode addrs.ResourceMode, typeName
 	case addrs.EphemeralResourceMode:
 		// Ephemeral resources don't have schema versions right now, since state is discarded for each refresh
 		return ss.EphemeralResources[typeName].Block, 0
+	case addrs.ListResourceMode:
+		// List resources don't have schema versions right now, since state is discarded for each use
+		return ss.ListResourceTypes[typeName].Block, 0
 	default:
 		// Shouldn't happen, because the above cases are comprehensive.
 		return nil, 0
@@ -82,6 +85,17 @@ func (resp ProviderSchema) Validate(addr addrs.Provider) error {
 			// We're not using the version numbers here yet, but we'll check
 			// for validity anyway in case we start using them in future.
 			return fmt.Errorf("provider %s has invalid negative schema version for ephemeral resource type %q, which is a bug in the provider", addr, t)
+		}
+	}
+
+	for t, d := range resp.ListResourceTypes {
+		if err := d.Block.InternalValidate(); err != nil {
+			return fmt.Errorf("provider %s has invalid schema for list resource type %q, which is a bug in the provider: %w", addr, t, err)
+		}
+		if d.Version < 0 {
+			// We're not using the version numbers here yet, but we'll check
+			// for validity anyway in case we start using them in future.
+			return fmt.Errorf("provider %s has invalid negative schema version for list resource type %q, which is a bug in the provider", addr, t)
 		}
 	}
 

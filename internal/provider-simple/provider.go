@@ -9,6 +9,7 @@ package simple
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -224,6 +225,16 @@ func (s simple) RenewEphemeralResource(_ context.Context, request providers.Rene
 }
 
 func (s simple) CloseEphemeralResource(_ context.Context, _ providers.CloseEphemeralResourceRequest) (resp providers.CloseEphemeralResourceResponse) {
+	return resp
+}
+
+func (s simple) ValidateListResourceConfig(_ context.Context, _ providers.ValidateListResourceConfigRequest) (resp providers.ValidateListResourceConfigResponse) {
+	resp.Diagnostics = resp.Diagnostics.Append(fmt.Errorf("list resources are not supported by this provider"))
+	return resp
+}
+
+func (s simple) ListResource(_ context.Context, _ providers.ListResourceRequest) (resp providers.ListResourceResponse) {
+	resp.Diagnostics = resp.Diagnostics.Append(fmt.Errorf("list resources are not supported by this provider"))
 	return resp
 }
 

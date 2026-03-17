@@ -148,6 +148,15 @@ type Configured interface {
 	// GetFunctions returns a full list of functions defined in this provider. It should be a super
 	// set of the functions returned in GetProviderSchema()
 	GetFunctions(context.Context) GetFunctionsResponse
+
+	// ValidateListResourceConfig validates the configuration of a list resource.
+	// Providers that do not support list resources should return an error diagnostic.
+	ValidateListResourceConfig(context.Context, ValidateListResourceConfigRequest) ValidateListResourceConfigResponse
+
+	// ListResource retrieves a list of existing resources of a given type from
+	// the remote infrastructure. This is used by the query command to find resources
+	// that can be imported into the OpenTofu state.
+	ListResource(context.Context, ListResourceRequest) ListResourceResponse
 }
 
 // Interface represents the set of methods required for a complete resource
@@ -186,6 +195,10 @@ type GetProviderSchemaResponse struct {
 
 	// EphemeralResources maps the ephemeral type name to that type's schema.
 	EphemeralResources map[string]Schema
+
+	// ListResourceTypes maps the list resource type name to that type's schema.
+	// Only populated for providers that support the list_resources capability.
+	ListResourceTypes map[string]Schema
 }
 
 // Schema pairs a provider or resource schema with that schema's version.
@@ -215,6 +228,9 @@ type ServerCapabilities struct {
 	// In other words, the providers for which GetProviderSchemaOptional is false
 	// require their schema to be read after EVERY instantiation to function normally.
 	GetProviderSchemaOptional bool
+
+	// ListResources signals that this provider supports the ListResource RPC.
+	ListResources bool
 }
 
 type FunctionSpec struct {
@@ -669,4 +685,64 @@ type CallFunctionArgumentError struct {
 
 func (err *CallFunctionArgumentError) Error() string {
 	return err.Text
+}
+
+// ValidateListResourceConfigRequest is the request type for ValidateListResourceConfig.
+type ValidateListResourceConfigRequest struct {
+	// TypeName is the name of the list resource type to validate.
+	TypeName string
+
+	// Config is the configuration value to validate, which may contain unknown values.
+	Config cty.Value
+}
+
+// ValidateListResourceConfigResponse is the response type for ValidateListResourceConfig.
+type ValidateListResourceConfigResponse struct {
+	// Diagnostics contains any warnings or errors from the method call.
+	Diagnostics tfdiags.Diagnostics
+}
+
+// ListResourceRequest is the request type for ListResource.
+type ListResourceRequest struct {
+	// TypeName is the name of the list resource type to query.
+	TypeName string
+
+	// Config is the provider-specific filter configuration for the query.
+	Config cty.Value
+
+	// IncludeResource when true indicates that the provider should return the full
+	// resource state for each result. When false, only the resource identity is returned.
+	IncludeResource bool
+
+	// Limit is the maximum number of results to return. If 0, the provider uses its default.
+	Limit int64
+
+	// ContinuationToken is used for pagination to retrieve additional results.
+	ContinuationToken []byte
+}
+
+// ListResourceItem represents a single resource returned by ListResource.
+type ListResourceItem struct {
+	// DisplayName is a human-readable name for the resource, if available.
+	DisplayName string
+
+	// Identity contains the identity data for the resource.
+	Identity []byte
+
+	// Resource contains the full resource state when IncludeResource was true.
+	// This field is only populated when requested.
+	Resource cty.Value
+}
+
+// ListResourceResponse is the response type for ListResource.
+type ListResourceResponse struct {
+	// Resources is the list of resources found by the query.
+	Resources []ListResourceItem
+
+	// ContinuationToken is used for pagination. If non-empty, there are more
+	// results available.
+	ContinuationToken []byte
+
+	// Diagnostics contains any warnings or errors from the method call.
+	Diagnostics tfdiags.Diagnostics
 }

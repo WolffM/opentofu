@@ -481,3 +481,43 @@ func (mr *MockProviderClientMockRecorder) ValidateResourceConfig(ctx, in any, op
 	varargs := append([]any{ctx, in}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateResourceConfig", reflect.TypeOf((*MockProviderClient)(nil).ValidateResourceConfig), varargs...)
 }
+
+// ValidateListResourceConfig mocks base method.
+func (m *MockProviderClient) ValidateListResourceConfig(ctx context.Context, in *tfplugin6.ValidateListResourceConfig_Request, opts ...grpc.CallOption) (*tfplugin6.ValidateListResourceConfig_Response, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, in}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ValidateListResourceConfig", varargs...)
+	ret0, _ := ret[0].(*tfplugin6.ValidateListResourceConfig_Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ValidateListResourceConfig indicates an expected call of ValidateListResourceConfig.
+func (mr *MockProviderClientMockRecorder) ValidateListResourceConfig(ctx, in any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, in}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateListResourceConfig", reflect.TypeOf((*MockProviderClient)(nil).ValidateListResourceConfig), varargs...)
+}
+
+// ListResource mocks base method.
+func (m *MockProviderClient) ListResource(ctx context.Context, in *tfplugin6.ListResource_Request, opts ...grpc.CallOption) (*tfplugin6.ListResource_Response, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, in}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ListResource", varargs...)
+	ret0, _ := ret[0].(*tfplugin6.ListResource_Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListResource indicates an expected call of ListResource.
+func (mr *MockProviderClientMockRecorder) ListResource(ctx, in any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, in}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListResource", reflect.TypeOf((*MockProviderClient)(nil).ListResource), varargs...)
+}

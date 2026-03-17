@@ -7,6 +7,7 @@ package grpcwrap
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/opentofu/opentofu/internal/plugin6/convert"
 	"github.com/opentofu/opentofu/internal/providers"
@@ -39,6 +40,7 @@ func (p *provider6) GetProviderSchema(_ context.Context, req *tfplugin6.GetProvi
 		ResourceSchemas:          make(map[string]*tfplugin6.Schema),
 		DataSourceSchemas:        make(map[string]*tfplugin6.Schema),
 		EphemeralResourceSchemas: make(map[string]*tfplugin6.Schema),
+		ListResourceSchemas:      make(map[string]*tfplugin6.Schema),
 	}
 
 	resp.Provider = &tfplugin6.Schema{
@@ -73,9 +75,16 @@ func (p *provider6) GetProviderSchema(_ context.Context, req *tfplugin6.GetProvi
 			Block:   convert.ConfigSchemaToProto(dat.Block),
 		}
 	}
+	for typ, dat := range p.schema.ListResourceTypes {
+		resp.ListResourceSchemas[typ] = &tfplugin6.Schema{
+			Version: dat.Version,
+			Block:   convert.ConfigSchemaToProto(dat.Block),
+		}
+	}
 
 	resp.ServerCapabilities = &tfplugin6.ServerCapabilities{
-		PlanDestroy: p.schema.ServerCapabilities.PlanDestroy,
+		PlanDestroy:   p.schema.ServerCapabilities.PlanDestroy,
+		ListResources: p.schema.ServerCapabilities.ListResources,
 	}
 
 	// include any diagnostics from the original GetSchema call
@@ -158,6 +167,86 @@ func (p *provider6) ValidateEphemeralResourceConfig(ctx context.Context, req *tf
 	})
 
 	resp.Diagnostics = convert.AppendProtoDiag(resp.Diagnostics, validateResp.Diagnostics)
+	return resp, nil
+}
+
+// ValidateListResourceConfig implements tfplugin6.ProviderServer.
+func (p *provider6) ValidateListResourceConfig(ctx context.Context, req *tfplugin6.ValidateListResourceConfig_Request) (*tfplugin6.ValidateListResourceConfig_Response, error) {
+	resp := &tfplugin6.ValidateListResourceConfig_Response{}
+	ty := p.schema.ListResourceTypes[req.TypeName].Block.ImpliedType()
+
+	configVal, err := decodeDynamicValue6(req.Config, ty)
+	if err != nil {
+		resp.Diagnostics = convert.AppendProtoDiag(resp.Diagnostics, err)
+		return resp, nil
+	}
+
+	validateResp := p.provider.ValidateListResourceConfig(ctx, providers.ValidateListResourceConfigRequest{
+		TypeName: req.TypeName,
+		Config:   configVal,
+	})
+
+	resp.Diagnostics = convert.AppendProtoDiag(resp.Diagnostics, validateResp.Diagnostics)
+	return resp, nil
+}
+
+// ListResource implements tfplugin6.ProviderServer.
+func (p *provider6) ListResource(ctx context.Context, req *tfplugin6.ListResource_Request) (*tfplugin6.ListResource_Response, error) {
+	resp := &tfplugin6.ListResource_Response{}
+
+	listSchema, ok := p.schema.ListResourceTypes[req.TypeName]
+	if !ok {
+		resp.Diagnostics = convert.AppendProtoDiag(resp.Diagnostics, fmt.Errorf("unknown list resource %q", req.TypeName))
+		return resp, nil
+	}
+
+	ty := listSchema.Block.ImpliedType()
+
+	var configVal cty.Value
+	if req.Config != nil {
+		var err error
+		configVal, err = decodeDynamicValue6(req.Config, ty)
+		if err != nil {
+			resp.Diagnostics = convert.AppendProtoDiag(resp.Diagnostics, err)
+			return resp, nil
+		}
+	} else {
+		configVal = cty.NullVal(ty)
+	}
+
+	listResp := p.provider.ListResource(ctx, providers.ListResourceRequest{
+		TypeName:          req.TypeName,
+		Config:            configVal,
+		IncludeResource:   req.IncludeResource,
+		Limit:             req.Limit,
+		ContinuationToken: req.ContinuationToken,
+	})
+
+	resp.Diagnostics = convert.AppendProtoDiag(resp.Diagnostics, listResp.Diagnostics)
+	resp.ContinuationToken = listResp.ContinuationToken
+
+	for _, item := range listResp.Resources {
+		protoResource := &tfplugin6.ListResource_Resource{
+			DisplayName: item.DisplayName,
+		}
+		if len(item.Identity) > 0 {
+			protoResource.Identity = &tfplugin6.ResourceIdentityData{
+				IdentityData: &tfplugin6.DynamicValue{
+					Msgpack: item.Identity,
+				},
+			}
+		}
+		if item.Resource != cty.NilVal {
+			mp, err := msgpack.Marshal(item.Resource, ty)
+			if err != nil {
+				resp.Diagnostics = convert.AppendProtoDiag(resp.Diagnostics, err)
+				return resp, nil
+			}
+			protoResource.Resource = &tfplugin6.DynamicValue{Msgpack: mp}
+		}
+		resp.Resources = append(resp.Resources, protoResource)
+	}
+
 	return resp, nil
 }
 

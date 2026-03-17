@@ -182,6 +182,14 @@ func (p providerForTest) ValidateEphemeralConfig(ctx context.Context, request pr
 	return p.internal.ValidateEphemeralConfig(ctx, request)
 }
 
+func (p providerForTest) ValidateListResourceConfig(ctx context.Context, r providers.ValidateListResourceConfigRequest) providers.ValidateListResourceConfigResponse {
+	return p.internal.ValidateListResourceConfig(ctx, r)
+}
+
+func (p providerForTest) ListResource(ctx context.Context, r providers.ListResourceRequest) providers.ListResourceResponse {
+	return p.internal.ListResource(ctx, r)
+}
+
 func (p providerForTest) Stop(ctx context.Context) error {
 	return p.internal.Stop(ctx)
 }
