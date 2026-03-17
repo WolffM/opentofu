@@ -139,7 +139,6 @@ OpenTofu will perform the following actions:
 
   # test_resource.resource will be imported
   # (imported from "1D5F5E9E-F2E5-401B-9ED5-692A215AC67E")
-
     resource "test_resource" "resource" {
         id    = "1D5F5E9E-F2E5-401B-9ED5-692A215AC67E"
         value = "Hello, World!"
