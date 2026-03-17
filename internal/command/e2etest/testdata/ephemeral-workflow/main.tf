@@ -16,7 +16,7 @@ variable "ephemeral_input" {
   type      = string
   ephemeral = true
   validation {
-    condition = var.ephemeral_input == "ephemeral_val"
+    condition     = var.ephemeral_input == "ephemeral_val"
     error_message = "this is just to ensure that error_message is not executed when condition suceeds. If the condition fails, it will fail because this message references an ephemeral value ${var.ephemeral_input}}"
   }
 }
@@ -37,12 +37,12 @@ ephemeral "simple_resource" "test_ephemeral" {
   provider = simple.s1
   // Having that "-with-renew" suffix, later when this value will be passed into "simple_resource.test_res.value_wo",
   // the plugin will delay the response on some requests to allow ephemeral Renew calls to be performed.
-  value    = "${data.simple_resource.test_data1.value}-${var.ephemeral_input}-with-renew"
+  value = "${data.simple_resource.test_data1.value}-${var.ephemeral_input}-with-renew"
 }
 
 resource "simple_resource" "test_res" {
   provider = simple.s1
-  value = "test value"
+  value    = "test value"
   // NOTE write-only arguments can reference ephemeral values.
   value_wo = ephemeral.simple_resource.test_ephemeral[0].value
   provisioner "local-exec" {
@@ -57,16 +57,29 @@ resource "simple_resource" "test_res" {
   // NOTE: value_wo cannot be used in a provisioner because it is returned as null by the provider so the interpolation fails
 }
 
-data "simple_resource" "test_data2" {
-  provider = simple.s1
-  value    = "test"
+// NOTE: During the reworking of the ephemeral resources, realised that this test does not cover the situation
+// where an ephemeral resource is deferred and it is referenced in other constructs to see that deferral
+// has indeed side effects.
+ephemeral "simple_resource" "deferred_ephemeral" {
+  value = simple_resource.test_res.id // This will create a dependency on the managed resource that will defer the opening
+}
+
+data "simple_resource" "deferred_data" {
+  // NOTE: "hardcoded" value here because we want this data source to be deferred for the apply phase but through
+  // indirect dependencies: data -(precondition)-> ephemeral -> managed resource
+  value    = "hardcoded"
   lifecycle {
     precondition {
-      // NOTE: precondition blocks can reference ephemeral values
-      condition     = ephemeral.simple_resource.test_ephemeral[0].value != null
+      condition     = !tofu.applying || ephemeral.simple_resource.deferred_ephemeral.value != null
       error_message = "test message"
     }
   }
+}
+
+module "call" {
+  source = "./mod"
+  // NOTE: because variable "in" is marked as ephemeral, this should work as expected.
+  in = ephemeral.simple_resource.test_ephemeral[0].value
 }
 
 locals {
@@ -74,7 +87,7 @@ locals {
 }
 
 provider "simple" {
-  alias       = "s2"
+  alias = "s2"
   // NOTE: Ensure that ephemeral values can be used to configure a provider.
   // This is needed in two cases: during plan/apply and also during destroy.
   // This test has been updated when DestroyEdgeTransformer was updated to
@@ -91,12 +104,6 @@ provider "simple" {
 resource "simple_resource" "test_res_second_provider" {
   provider = simple.s2
   value    = "just a simple resource to ensure that the second provider it's working fine"
-}
-
-module "call" {
-  source = "./mod"
-  in     = ephemeral.simple_resource.test_ephemeral[0].value
-  // NOTE: because variable "in" is marked as ephemeral, this should work as expected.
 }
 
 output "final_output" {

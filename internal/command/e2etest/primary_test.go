@@ -280,11 +280,11 @@ plan. Resource actions are indicated with the following symbols:
 
 OpenTofu will perform the following actions:
 
-  # data.simple_resource.test_data2 will be read during apply
+  # data.simple_resource.deferred_data will be read during apply
   # (depends on a resource or a module with changes pending)
- <= data "simple_resource" "test_data2" {
+ <= data "simple_resource" "deferred_data" {
       + id    = (known after apply)
-      + value = "test"
+      + value = "hardcoded"
     }
 
   # simple_resource.test_res will be created
@@ -305,12 +305,14 @@ Changes to Outputs:
   + final_output = "just a simple resource to ensure that the second provider it's working fine"`
 
 			entriesChecker := &outputEntriesChecker{phase: "plan"}
-			entriesChecker.addChecks(outputEntry{[]string{"data.simple_resource.test_data1: Reading..."}, true},
+			entriesChecker.addChecks(
+				outputEntry{[]string{"data.simple_resource.test_data1: Reading..."}, true},
 				outputEntry{[]string{"data.simple_resource.test_data1: Read complete after"}, true},
 				outputEntry{[]string{"ephemeral.simple_resource.test_ephemeral[0]: Opening..."}, true},
 				outputEntry{[]string{"ephemeral.simple_resource.test_ephemeral[0]: Open complete after"}, true},
 				outputEntry{[]string{"ephemeral.simple_resource.test_ephemeral[1]: Opening..."}, true},
 				outputEntry{[]string{"ephemeral.simple_resource.test_ephemeral[1]: Open complete after"}, true},
+				outputEntry{[]string{"ephemeral.simple_resource.deferred_ephemeral: Deferred due to pending dependencies"}, true},
 				outputEntry{[]string{"ephemeral.simple_resource.test_ephemeral[0]: Closing..."}, true},
 				outputEntry{[]string{"ephemeral.simple_resource.test_ephemeral[0]: Close complete after"}, true},
 				outputEntry{[]string{"ephemeral.simple_resource.test_ephemeral[1]: Closing..."}, true},
@@ -332,15 +334,8 @@ Changes to Outputs:
 			idx := slices.IndexFunc(plan.Changes.Resources, func(src *plans.ResourceInstanceChangeSrc) bool {
 				return src.Addr.Resource.Resource.Mode == addrs.EphemeralResourceMode
 			})
-			if idx < 0 {
-				t.Fatalf("no ephemeral resource found in the plan file")
-			}
-			res := plan.Changes.Resources[idx]
-			if res.Before != nil {
-				t.Errorf("ephemeral resource %q from plan contains before value but it shouldn't: %s", res.Addr.String(), res.Before)
-			}
-			if res.After != nil {
-				t.Errorf("ephemeral resource %q from plan contains after value but it shouldn't: %s", res.Addr.String(), res.After)
+			if idx >= 0 {
+				t.Fatalf("ephemeral resource found in the plan file. expected to have no ephemeral resource")
 			}
 			// variables check
 			varDynVal, ok := plan.VariableValues["simple_input"]

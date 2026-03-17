@@ -188,8 +188,8 @@ func (s simple) ApplyResourceChange(_ context.Context, req providers.ApplyResour
 	}
 
 	m := req.PlannedState.AsValueMap()
-	_, ok := m["id"]
-	if !ok {
+	idVal, ok := m["id"]
+	if !ok || idVal.IsNull() {
 		m["id"] = cty.StringVal(time.Now().String())
 	}
 	waitIfRequested(req.Config.AsValueMap())
