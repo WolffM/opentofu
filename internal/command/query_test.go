@@ -133,13 +133,14 @@ func TestQueryCommand_ParseArgs(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "generate-config-out flag",
-			args:    []string{"-generate-config-out=output.tf"},
-			wantErr: false,
-		},
-		{
 			name:    "unknown flag",
 			args:    []string{"-unknown-flag"},
+			wantErr: true,
+		},
+		{
+			// -generate-config-out is not supported and should fail
+			name:    "generate-config-out flag",
+			args:    []string{"-generate-config-out=output.tf"},
 			wantErr: true,
 		},
 	}

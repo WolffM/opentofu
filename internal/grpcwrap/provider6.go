@@ -174,7 +174,14 @@ func (p *provider6) ValidateEphemeralResourceConfig(ctx context.Context, req *tf
 // ValidateListResourceConfig implements tfplugin6.ProviderServer.
 func (p *provider6) ValidateListResourceConfig(ctx context.Context, req *tfplugin6.ValidateListResourceConfig_Request) (*tfplugin6.ValidateListResourceConfig_Response, error) {
 	resp := &tfplugin6.ValidateListResourceConfig_Response{}
-	ty := p.schema.ListResourceTypes[req.TypeName].Block.ImpliedType()
+
+	listSchema, ok := p.schema.ListResourceTypes[req.TypeName]
+	if !ok {
+		resp.Diagnostics = convert.AppendProtoDiag(resp.Diagnostics, fmt.Errorf("unknown list resource %q", req.TypeName))
+		return resp, nil
+	}
+
+	ty := listSchema.Block.ImpliedType()
 
 	configVal, err := decodeDynamicValue6(req.Config, ty)
 	if err != nil {
@@ -215,13 +222,26 @@ func (p *provider6) ListResource(ctx context.Context, req *tfplugin6.ListResourc
 		configVal = cty.NullVal(ty)
 	}
 
-	listResp := p.provider.ListResource(ctx, providers.ListResourceRequest{
+	listReq := providers.ListResourceRequest{
 		TypeName:          req.TypeName,
 		Config:            configVal,
 		IncludeResource:   req.IncludeResource,
 		Limit:             req.Limit,
 		ContinuationToken: req.ContinuationToken,
-	})
+	}
+
+	// Decode provider_meta if provided
+	if req.ProviderMeta != nil && p.schema.ProviderMeta.Block != nil {
+		metaTy := p.schema.ProviderMeta.Block.ImpliedType()
+		metaVal, err := decodeDynamicValue6(req.ProviderMeta, metaTy)
+		if err != nil {
+			resp.Diagnostics = convert.AppendProtoDiag(resp.Diagnostics, err)
+			return resp, nil
+		}
+		listReq.ProviderMeta = metaVal
+	}
+
+	listResp := p.provider.ListResource(ctx, listReq)
 
 	resp.Diagnostics = convert.AppendProtoDiag(resp.Diagnostics, listResp.Diagnostics)
 	resp.ContinuationToken = listResp.ContinuationToken

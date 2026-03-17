@@ -926,6 +926,9 @@ type ServerCapabilities struct {
 	// normally, and the caller can used a cached copy of the provider's
 	// schema.
 	GetProviderSchemaOptional bool `protobuf:"varint,2,opt,name=get_provider_schema_optional,json=getProviderSchemaOptional,proto3" json:"get_provider_schema_optional,omitempty"`
+	// The move_resource_state capability signals that a provider supports the
+	// MoveResourceState RPC.
+	MoveResourceState bool `protobuf:"varint,3,opt,name=move_resource_state,json=moveResourceState,proto3" json:"move_resource_state,omitempty"`
 	// list_resources signals that this provider supports the ListResource RPC.
 	ListResources bool `protobuf:"varint,4,opt,name=list_resources,json=listResources,proto3" json:"list_resources,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -972,6 +975,13 @@ func (x *ServerCapabilities) GetPlanDestroy() bool {
 func (x *ServerCapabilities) GetGetProviderSchemaOptional() bool {
 	if x != nil {
 		return x.GetProviderSchemaOptional
+	}
+	return false
+}
+
+func (x *ServerCapabilities) GetMoveResourceState() bool {
+	if x != nil {
+		return x.MoveResourceState
 	}
 	return false
 }
@@ -6095,10 +6105,11 @@ const file_tfplugin6_proto_rawDesc = "" +
 	"\vdescription\x18\x05 \x01(\tR\vdescription\x12@\n" +
 	"\x10description_kind\x18\x06 \x01(\x0e2\x15.tfplugin6.StringKindR\x0fdescriptionKind\x1a\x1c\n" +
 	"\x06Return\x12\x12\n" +
-	"\x04type\x18\x01 \x01(\fR\x04type\"\x9f\x01\n" +
+	"\x04type\x18\x01 \x01(\fR\x04type\"\xcf\x01\n" +
 	"\x12ServerCapabilities\x12!\n" +
 	"\fplan_destroy\x18\x01 \x01(\bR\vplanDestroy\x12?\n" +
-	"\x1cget_provider_schema_optional\x18\x02 \x01(\bR\x19getProviderSchemaOptional\x12%\n" +
+	"\x1cget_provider_schema_optional\x18\x02 \x01(\bR\x19getProviderSchemaOptional\x12.\n" +
+	"\x13move_resource_state\x18\x03 \x01(\bR\x11moveResourceState\x12%\n" +
 	"\x0elist_resources\x18\x04 \x01(\bR\rlistResources\"\x82\x01\n" +
 	"\x12ClientCapabilities\x12)\n" +
 	"\x10deferral_allowed\x18\x01 \x01(\bR\x0fdeferralAllowed\x12A\n" +

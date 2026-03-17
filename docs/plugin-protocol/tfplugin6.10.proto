@@ -300,6 +300,10 @@ message ServerCapabilities {
     // schema.
     bool get_provider_schema_optional = 2;
 
+    // The move_resource_state capability signals that a provider supports the
+    // MoveResourceState RPC.
+    bool move_resource_state = 3;
+
     // list_resources signals that this provider supports the ListResource RPC.
     bool list_resources = 4;
 }

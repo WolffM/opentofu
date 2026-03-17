@@ -1067,7 +1067,13 @@ func (p *GRPCProvider) ValidateListResourceConfig(ctx context.Context, r provide
 		return resp
 	}
 
-	mp, err := msgpack.Marshal(r.Config, listResourceSchema.Block.ImpliedType())
+	// Use a null value of the correct type when config is unset (cty.NilVal has no type).
+	config := r.Config
+	if config == cty.NilVal {
+		config = cty.NullVal(listResourceSchema.Block.ImpliedType())
+	}
+
+	mp, err := msgpack.Marshal(config, listResourceSchema.Block.ImpliedType())
 	if err != nil {
 		resp.Diagnostics = resp.Diagnostics.Append(err)
 		return resp
@@ -1122,6 +1128,19 @@ func (p *GRPCProvider) ListResource(ctx context.Context, r providers.ListResourc
 
 	if config != nil {
 		protoReq.Config = &proto6.DynamicValue{Msgpack: config}
+	}
+
+	// Pass provider_meta if provided
+	if r.ProviderMeta != cty.NilVal {
+		providerMetaSchemas := schema.ProviderMeta
+		if providerMetaSchemas.Block != nil {
+			mp, err := msgpack.Marshal(r.ProviderMeta, providerMetaSchemas.Block.ImpliedType())
+			if err != nil {
+				resp.Diagnostics = resp.Diagnostics.Append(err)
+				return resp
+			}
+			protoReq.ProviderMeta = &proto6.DynamicValue{Msgpack: mp}
+		}
 	}
 
 	protoResp, err := p.client.ListResource(ctx, protoReq)

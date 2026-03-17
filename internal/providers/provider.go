@@ -710,6 +710,10 @@ type ListResourceRequest struct {
 	// Config is the provider-specific filter configuration for the query.
 	Config cty.Value
 
+	// ProviderMeta is the provider-meta configuration, if any.
+	// This is used to pass provider-metadata from the module.
+	ProviderMeta cty.Value
+
 	// IncludeResource when true indicates that the provider should return the full
 	// resource state for each result. When false, only the resource identity is returned.
 	IncludeResource bool

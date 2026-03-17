@@ -11,12 +11,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hcldec"
 	"github.com/opentofu/opentofu/internal/addrs"
 	"github.com/opentofu/opentofu/internal/configs"
 	"github.com/opentofu/opentofu/internal/providers"
 	"github.com/opentofu/opentofu/internal/tfdiags"
-	ctyjson "github.com/zclconf/go-cty/cty/json"
 	"github.com/zclconf/go-cty/cty"
+	ctyjson "github.com/zclconf/go-cty/cty/json"
 )
 
 // QueryCommand implements the "tofu query" command, which queries existing
@@ -48,10 +50,6 @@ type queryArgs struct {
 	// NoColor disables colorized output.
 	NoColor bool
 
-	// GenerateConfigOut is an optional path to write generated import/resource
-	// configuration.
-	GenerateConfigOut string
-
 	// Vars contains variable values to pass to the query configuration.
 	Vars []string
 
@@ -72,10 +70,6 @@ func parseQueryArgs(rawArgs []string) (queryArgs, tfdiags.Diagnostics) {
 			args.JSONOutput = true
 		case arg == "-no-color":
 			args.NoColor = true
-		case strings.HasPrefix(arg, "-generate-config-out="):
-			args.GenerateConfigOut = strings.TrimPrefix(arg, "-generate-config-out=")
-		case strings.HasPrefix(arg, "-generate-config="):
-			args.GenerateConfigOut = strings.TrimPrefix(arg, "-generate-config=")
 		case strings.HasPrefix(arg, "-var="):
 			args.Vars = append(args.Vars, strings.TrimPrefix(arg, "-var="))
 		case arg == "-var" && i+1 < len(rawArgs):
@@ -199,7 +193,7 @@ func (c *QueryCommand) run(ctx context.Context, args queryArgs) int {
 			continue
 		}
 
-		// Get provider schema to configure it
+		// Get provider schema
 		schemaResp := provider.GetProviderSchema(ctx)
 		if schemaResp.Diagnostics.HasErrors() {
 			for _, d := range schemaResp.Diagnostics {
@@ -227,7 +221,7 @@ func (c *QueryCommand) run(ctx context.Context, args queryArgs) int {
 		}
 
 		// Find the list resource schema
-		_, ok = schemaResp.ListResourceTypes[lr.Type]
+		listSchema, ok := schemaResp.ListResourceTypes[lr.Type]
 		if !ok {
 			result.Diagnostics = append(result.Diagnostics, queryResultDiagnostic{
 				Severity: "error",
@@ -239,12 +233,49 @@ func (c *QueryCommand) run(ctx context.Context, args queryArgs) int {
 			continue
 		}
 
-		// Configure the provider with empty config (the main config is not parsed yet)
+		// Configure the provider with empty config (provider config from main module is not evaluated here)
 		configureResp := provider.ConfigureProvider(ctx, providers.ConfigureProviderRequest{
 			Config: cty.EmptyObjectVal,
 		})
 		if configureResp.Diagnostics.HasErrors() {
 			for _, d := range configureResp.Diagnostics {
+				result.Diagnostics = append(result.Diagnostics, queryResultDiagnostic{
+					Severity: diagSeverityString(d),
+					Summary:  d.Description().Summary,
+					Detail:   d.Description().Detail,
+				})
+			}
+			provider.Close(ctx) //nolint:errcheck
+			results = append(results, result)
+			continue
+		}
+
+		// Decode the list resource config from the HCL body using the provider schema
+		listConfig := cty.EmptyObjectVal
+		if lr.Config != nil && listSchema.Block != nil {
+			decoded, hclDiags := hcldec.Decode(lr.Config, listSchema.Block.DecoderSpec(), &hcl.EvalContext{})
+			if hclDiags.HasErrors() {
+				for _, d := range hclDiags {
+					result.Diagnostics = append(result.Diagnostics, queryResultDiagnostic{
+						Severity: "error",
+						Summary:  d.Summary,
+						Detail:   d.Detail,
+					})
+				}
+				provider.Close(ctx) //nolint:errcheck
+				results = append(results, result)
+				continue
+			}
+			listConfig = decoded
+		}
+
+		// Validate the list resource config
+		validateResp := provider.ValidateListResourceConfig(ctx, providers.ValidateListResourceConfigRequest{
+			TypeName: lr.Type,
+			Config:   listConfig,
+		})
+		if validateResp.Diagnostics.HasErrors() {
+			for _, d := range validateResp.Diagnostics {
 				result.Diagnostics = append(result.Diagnostics, queryResultDiagnostic{
 					Severity: diagSeverityString(d),
 					Summary:  d.Description().Summary,
@@ -276,10 +307,10 @@ func (c *QueryCommand) run(ctx context.Context, args queryArgs) int {
 			}
 		}
 
-		// Call ListResource
+		// Call ListResource with the decoded config
 		listResp := provider.ListResource(ctx, providers.ListResourceRequest{
 			TypeName:        lr.Type,
-			Config:          cty.EmptyObjectVal,
+			Config:          listConfig,
 			IncludeResource: includeResource,
 			Limit:           limit,
 		})
@@ -413,9 +444,6 @@ Options:
   -json                    Produce output in a machine-readable JSON format.
 
   -no-color                If specified, output will not contain any color.
-
-  -generate-config-out=PATH  Generate import and resource blocks for the query
-                            results and write them to the specified file.
 
   -var 'foo=bar'           Set a value for one of the input variables in the
                            query file configuration. Use this option more than
