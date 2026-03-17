@@ -531,7 +531,7 @@ func describeImport(id string, identity cty.Value) string {
 	if id != "" {
 		return fmt.Sprintf(" [id=%s]", id)
 	}
-	if k, v := format.ObjectValueBest(identity); k != "" {
+	if k, v := format.ObjectValueBestGuess(identity); k != "" {
 		return fmt.Sprintf(" [%s=%s]", k, v)
 	}
 	return ""

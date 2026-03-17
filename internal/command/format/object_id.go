@@ -161,14 +161,14 @@ func ObjectValueIDOrName(obj cty.Value) (k, v string) {
 	return
 }
 
-// ObjectValueBest is a wrapper around ObjectValueIDOrName that attempts to extract the best possible human-friendly
+// ObjectValueBestGuess is a wrapper around ObjectValueIDOrName that attempts to extract the best possible human-friendly
 // string value for an object by first trying the ID and Name heuristics, and then falling back to any other string attribute if those fail.
 // This is intended to be used in cases where we want to display some sort of human-friendly context about an object,
 // but we don't have a specific expectation about which attribute will be the most useful for that purpose.
 //
 // Just as with the functions it wraps, it may return two empty strings if no suitable attribute can be found for a given object.
-func ObjectValueBest(obj cty.Value) (k, v string) {
-	// First,attempt to fetch it from ir or name attributes, which are the most likely to be unique and human-friendly, respectively.
+func ObjectValueBestGuess(obj cty.Value) (k, v string) {
+	// First,attempt to fetch it from id or name attributes, which are the most likely to be unique and human-friendly, respectively.
 	k, v = ObjectValueIDOrName(obj)
 	if k != "" {
 		return
@@ -183,10 +183,9 @@ func ObjectValueBest(obj cty.Value) (k, v string) {
 	// This is a bit of a Hail Mary, but it is better than nothing.
 	attributeTypes := obj.Type().AttributeTypes()
 
-	// Fetch whichver string attribute is first in the list that is not marked as unusable, and return it as the best effort description of this object.
-	// We itearte over the attributes in sorted order to ensure that we get a deterministic result, even if the underlying map iteration order is not deterministic.
+	// Fetch whichever string attribute is first in the list that is not marked as unusable, and return it as the best effort description of this object.
+	// We iterate over the attributes in sorted order to ensure that we get a deterministic result, even if the underlying map iteration order is not deterministic.
 	for _, k := range slices.Sorted(maps.Keys(attributeTypes)) {
-
 		// We specifically only want strings
 		if attributeTypes[k] != cty.String {
 			continue
@@ -203,5 +202,7 @@ func ObjectValueBest(obj cty.Value) (k, v string) {
 		}
 	}
 
+	// If we got here, then we have no useful information about this object, so we return "", "" to indicate that the
+	// caller should skip printing this information, or attempt another way
 	return "", ""
 }
