@@ -236,6 +236,16 @@ func (s simple) CloseEphemeralResource(context.Context, providers.CloseEphemeral
 	return resp
 }
 
+func (s simple) ValidateListResourceConfig(_ context.Context, _ providers.ValidateListResourceConfigRequest) (resp providers.ValidateListResourceConfigResponse) {
+	resp.Diagnostics = resp.Diagnostics.Append(fmt.Errorf("list resources are not supported by this provider"))
+	return resp
+}
+
+func (s simple) ListResource(_ context.Context, _ providers.ListResourceRequest) (resp providers.ListResourceResponse) {
+	resp.Diagnostics = resp.Diagnostics.Append(fmt.Errorf("list resources are not supported by this provider"))
+	return resp
+}
+
 func (s simple) GetFunctions(context.Context) providers.GetFunctionsResponse {
 	panic("Not Implemented")
 }

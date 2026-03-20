@@ -254,6 +254,12 @@ func initCommands(
 			}, nil
 		},
 
+		"query": func() (cli.Command, error) {
+			return &command.QueryCommand{
+				Meta: meta,
+			}, nil
+		},
+
 		"providers": func() (cli.Command, error) {
 			return &command.ProvidersCommand{
 				Meta: meta,

@@ -110,6 +110,7 @@ func (p *GRPCProvider) getProviderSchema(ctx context.Context) (resp providers.Ge
 	resp.ResourceTypes = make(map[string]providers.Schema)
 	resp.DataSources = make(map[string]providers.Schema)
 	resp.EphemeralResources = make(map[string]providers.Schema)
+	resp.ListResourceTypes = make(map[string]providers.Schema)
 	resp.Functions = make(map[string]providers.FunctionSpec)
 
 	protoResp, err := p.getProtoProviderSchema(ctx)
@@ -151,6 +152,8 @@ func (p *GRPCProvider) getProviderSchema(ctx context.Context) (resp providers.Ge
 		resp.EphemeralResources[name] = convert.ProtoToEphemeralProviderSchema(data)
 	}
 
+	// Note: ListResourceSchemas is not supported in protocol version 5.
+
 	for name, fn := range protoResp.Functions {
 		resp.Functions[name] = convert.ProtoToFunctionSpec(fn)
 	}
@@ -158,6 +161,7 @@ func (p *GRPCProvider) getProviderSchema(ctx context.Context) (resp providers.Ge
 	if protoResp.ServerCapabilities != nil {
 		resp.ServerCapabilities.PlanDestroy = protoResp.ServerCapabilities.PlanDestroy
 		resp.ServerCapabilities.GetProviderSchemaOptional = protoResp.ServerCapabilities.GetProviderSchemaOptional
+		// Note: ListResources capability is not supported in protocol version 5.
 	}
 
 	return resp
@@ -1055,6 +1059,18 @@ func (p *GRPCProvider) Close(ctx context.Context) error {
 
 	p.PluginClient.Kill()
 	return nil
+}
+
+func (p *GRPCProvider) ValidateListResourceConfig(ctx context.Context, r providers.ValidateListResourceConfigRequest) (resp providers.ValidateListResourceConfigResponse) {
+	logger.Trace("GRPCProvider: ValidateListResourceConfig")
+	resp.Diagnostics = resp.Diagnostics.Append(fmt.Errorf("list resources are not supported by this provider (protocol version 5)"))
+	return resp
+}
+
+func (p *GRPCProvider) ListResource(ctx context.Context, r providers.ListResourceRequest) (resp providers.ListResourceResponse) {
+	logger.Trace("GRPCProvider: ListResource")
+	resp.Diagnostics = resp.Diagnostics.Append(fmt.Errorf("list resources are not supported by this provider (protocol version 5)"))
+	return resp
 }
 
 // Decode a DynamicValue from either the JSON or MsgPack encoding.

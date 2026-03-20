@@ -110,6 +110,7 @@ func (p *GRPCProvider) getProviderSchema(ctx context.Context) (resp providers.Ge
 	resp.ResourceTypes = make(map[string]providers.Schema)
 	resp.DataSources = make(map[string]providers.Schema)
 	resp.EphemeralResources = make(map[string]providers.Schema)
+	resp.ListResourceTypes = make(map[string]providers.Schema)
 	resp.Functions = make(map[string]providers.FunctionSpec)
 
 	protoResp, err := p.getProtoProviderSchema(ctx)
@@ -155,9 +156,14 @@ func (p *GRPCProvider) getProviderSchema(ctx context.Context) (resp providers.Ge
 		resp.EphemeralResources[name] = convert.ProtoToEphemeralProviderSchema(res)
 	}
 
+	for name, data := range protoResp.ListResourceSchemas {
+		resp.ListResourceTypes[name] = convert.ProtoToProviderSchema(data)
+	}
+
 	if protoResp.ServerCapabilities != nil {
 		resp.ServerCapabilities.PlanDestroy = protoResp.ServerCapabilities.PlanDestroy
 		resp.ServerCapabilities.GetProviderSchemaOptional = protoResp.ServerCapabilities.GetProviderSchemaOptional
+		resp.ServerCapabilities.ListResources = protoResp.ServerCapabilities.ListResources
 	}
 
 	return resp
@@ -1044,6 +1050,135 @@ func (p *GRPCProvider) Close(_ context.Context) error {
 
 	p.PluginClient.Kill()
 	return nil
+}
+
+func (p *GRPCProvider) ValidateListResourceConfig(ctx context.Context, r providers.ValidateListResourceConfigRequest) (resp providers.ValidateListResourceConfigResponse) {
+	logger.Trace("GRPCProvider.v6: ValidateListResourceConfig")
+
+	schema := p.GetProviderSchema(ctx)
+	if schema.Diagnostics.HasErrors() {
+		resp.Diagnostics = schema.Diagnostics
+		return resp
+	}
+
+	listResourceSchema, ok := schema.ListResourceTypes[r.TypeName]
+	if !ok {
+		resp.Diagnostics = resp.Diagnostics.Append(fmt.Errorf("unknown list resource %q", r.TypeName))
+		return resp
+	}
+
+	// Use a null value of the correct type when config is unset (cty.NilVal has no type).
+	config := r.Config
+	if config == cty.NilVal {
+		config = cty.NullVal(listResourceSchema.Block.ImpliedType())
+	}
+
+	mp, err := msgpack.Marshal(config, listResourceSchema.Block.ImpliedType())
+	if err != nil {
+		resp.Diagnostics = resp.Diagnostics.Append(err)
+		return resp
+	}
+
+	protoReq := &proto6.ValidateListResourceConfig_Request{
+		TypeName: r.TypeName,
+		Config:   &proto6.DynamicValue{Msgpack: mp},
+	}
+
+	protoResp, err := p.client.ValidateListResourceConfig(ctx, protoReq)
+	if err != nil {
+		resp.Diagnostics = resp.Diagnostics.Append(grpcErr(err))
+		return resp
+	}
+	resp.Diagnostics = resp.Diagnostics.Append(convert.ProtoToDiagnostics(protoResp.Diagnostics))
+	return resp
+}
+
+func (p *GRPCProvider) ListResource(ctx context.Context, r providers.ListResourceRequest) (resp providers.ListResourceResponse) {
+	logger.Trace("GRPCProvider.v6: ListResource")
+
+	schema := p.GetProviderSchema(ctx)
+	if schema.Diagnostics.HasErrors() {
+		resp.Diagnostics = schema.Diagnostics
+		return resp
+	}
+
+	listResourceSchema, ok := schema.ListResourceTypes[r.TypeName]
+	if !ok {
+		resp.Diagnostics = resp.Diagnostics.Append(fmt.Errorf("unknown list resource %q", r.TypeName))
+		return resp
+	}
+
+	var config []byte
+	if r.Config != cty.NilVal {
+		var err error
+		config, err = msgpack.Marshal(r.Config, listResourceSchema.Block.ImpliedType())
+		if err != nil {
+			resp.Diagnostics = resp.Diagnostics.Append(err)
+			return resp
+		}
+	}
+
+	protoReq := &proto6.ListResource_Request{
+		TypeName:           r.TypeName,
+		IncludeResource:    r.IncludeResource,
+		Limit:              r.Limit,
+		ContinuationToken:  r.ContinuationToken,
+		ClientCapabilities: clientCapabilities,
+	}
+
+	if config != nil {
+		protoReq.Config = &proto6.DynamicValue{Msgpack: config}
+	}
+
+	// Pass provider_meta if provided
+	if r.ProviderMeta != cty.NilVal {
+		providerMetaSchemas := schema.ProviderMeta
+		if providerMetaSchemas.Block != nil {
+			mp, err := msgpack.Marshal(r.ProviderMeta, providerMetaSchemas.Block.ImpliedType())
+			if err != nil {
+				resp.Diagnostics = resp.Diagnostics.Append(err)
+				return resp
+			}
+			protoReq.ProviderMeta = &proto6.DynamicValue{Msgpack: mp}
+		}
+	}
+
+	protoResp, err := p.client.ListResource(ctx, protoReq)
+	if err != nil {
+		resp.Diagnostics = resp.Diagnostics.Append(grpcErr(err))
+		return resp
+	}
+	resp.Diagnostics = resp.Diagnostics.Append(convert.ProtoToDiagnostics(protoResp.Diagnostics))
+
+	if resp.Diagnostics.HasErrors() {
+		return resp
+	}
+
+	resp.ContinuationToken = protoResp.ContinuationToken
+	resp.Resources = make([]providers.ListResourceItem, 0, len(protoResp.Resources))
+	for _, protoResource := range protoResp.Resources {
+		item := providers.ListResourceItem{
+			DisplayName: protoResource.DisplayName,
+		}
+		if protoResource.Identity != nil && protoResource.Identity.IdentityData != nil {
+			if len(protoResource.Identity.IdentityData.Msgpack) > 0 {
+				item.Identity = protoResource.Identity.IdentityData.Msgpack
+			} else if len(protoResource.Identity.IdentityData.Json) > 0 {
+				item.Identity = protoResource.Identity.IdentityData.Json
+			}
+		}
+		if r.IncludeResource && protoResource.Resource != nil {
+			resourceVal, err := decodeDynamicValue(protoResource.Resource, listResourceSchema.Block.ImpliedType())
+			if err != nil {
+				resp.Diagnostics = resp.Diagnostics.Append(err)
+				return resp
+			}
+			item.Resource = resourceVal
+		}
+		resp.Resources = append(resp.Resources, item)
+	}
+
+	return resp
 }
 
 // Decode a DynamicValue from either the JSON or MsgPack encoding.

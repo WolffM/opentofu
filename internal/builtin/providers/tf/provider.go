@@ -144,6 +144,16 @@ func (p *Provider) CloseEphemeralResource(context.Context, providers.CloseEpheme
 	panic("Should not be called directly, special case for terraform_remote_state")
 }
 
+// ValidateListResourceConfig validates the configuration of a list resource.
+func (p *Provider) ValidateListResourceConfig(_ context.Context, _ providers.ValidateListResourceConfigRequest) providers.ValidateListResourceConfigResponse {
+	panic("Should not be called directly, special case for terraform_remote_state")
+}
+
+// ListResource is used to list existing resources.
+func (p *Provider) ListResource(_ context.Context, _ providers.ListResourceRequest) providers.ListResourceResponse {
+	panic("Should not be called directly, special case for terraform_remote_state")
+}
+
 // Stop is called when the provider should halt any in-flight actions.
 func (p *Provider) Stop(_ context.Context) error {
 	log.Println("[DEBUG] terraform provider cannot Stop")

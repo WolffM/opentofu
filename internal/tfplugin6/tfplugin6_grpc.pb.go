@@ -1,11 +1,20 @@
+// Copyright (c) The OpenTofu Authors
+// SPDX-License-Identifier: MPL-2.0
 // Copyright (c) HashiCorp, Inc.
 // SPDX-License-Identifier: MPL-2.0
 
-// Terraform Plugin RPC protocol version 6.9
+// Terraform Plugin RPC protocol version 6.10
 //
-// This file defines version 6.9 of the RPC protocol. To implement a plugin
+// This file defines version 6.10 of the RPC protocol. To implement a plugin
 // against this protocol, copy this definition into your own codebase and
 // use protoc to generate stubs for your target language.
+//
+// Changes from version 6.9:
+// - Added ListResource RPC for querying existing infrastructure resources
+// - Added ValidateListResourceConfig RPC for validating list resource configuration
+// - Added list_resource_schemas to GetProviderSchema.Response
+// - Added list_resources to GetMetadata.Response
+// - Added list_resources capability to ServerCapabilities
 //
 // This file will not be updated. Any minor versions of protocol 6 to follow
 // should copy this file and modify the copy while maintaining backwards
@@ -56,6 +65,8 @@ const (
 	Provider_ImportResourceState_FullMethodName             = "/tfplugin6.Provider/ImportResourceState"
 	Provider_MoveResourceState_FullMethodName               = "/tfplugin6.Provider/MoveResourceState"
 	Provider_ReadDataSource_FullMethodName                  = "/tfplugin6.Provider/ReadDataSource"
+	Provider_ValidateListResourceConfig_FullMethodName      = "/tfplugin6.Provider/ValidateListResourceConfig"
+	Provider_ListResource_FullMethodName                    = "/tfplugin6.Provider/ListResource"
 	Provider_ValidateEphemeralResourceConfig_FullMethodName = "/tfplugin6.Provider/ValidateEphemeralResourceConfig"
 	Provider_OpenEphemeralResource_FullMethodName           = "/tfplugin6.Provider/OpenEphemeralResource"
 	Provider_RenewEphemeralResource_FullMethodName          = "/tfplugin6.Provider/RenewEphemeralResource"
@@ -97,6 +108,9 @@ type ProviderClient interface {
 	ImportResourceState(ctx context.Context, in *ImportResourceState_Request, opts ...grpc.CallOption) (*ImportResourceState_Response, error)
 	MoveResourceState(ctx context.Context, in *MoveResourceState_Request, opts ...grpc.CallOption) (*MoveResourceState_Response, error)
 	ReadDataSource(ctx context.Context, in *ReadDataSource_Request, opts ...grpc.CallOption) (*ReadDataSource_Response, error)
+	// ////// List Resources (querying existing infrastructure)
+	ValidateListResourceConfig(ctx context.Context, in *ValidateListResourceConfig_Request, opts ...grpc.CallOption) (*ValidateListResourceConfig_Response, error)
+	ListResource(ctx context.Context, in *ListResource_Request, opts ...grpc.CallOption) (*ListResource_Response, error)
 	// ////// Ephemeral Resource Lifecycle
 	ValidateEphemeralResourceConfig(ctx context.Context, in *ValidateEphemeralResourceConfig_Request, opts ...grpc.CallOption) (*ValidateEphemeralResourceConfig_Response, error)
 	OpenEphemeralResource(ctx context.Context, in *OpenEphemeralResource_Request, opts ...grpc.CallOption) (*OpenEphemeralResource_Response, error)
@@ -254,6 +268,24 @@ func (c *providerClient) ReadDataSource(ctx context.Context, in *ReadDataSource_
 	return out, nil
 }
 
+func (c *providerClient) ValidateListResourceConfig(ctx context.Context, in *ValidateListResourceConfig_Request, opts ...grpc.CallOption) (*ValidateListResourceConfig_Response, error) {
+	out := new(ValidateListResourceConfig_Response)
+	err := c.cc.Invoke(ctx, Provider_ValidateListResourceConfig_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *providerClient) ListResource(ctx context.Context, in *ListResource_Request, opts ...grpc.CallOption) (*ListResource_Response, error) {
+	out := new(ListResource_Response)
+	err := c.cc.Invoke(ctx, Provider_ListResource_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *providerClient) ValidateEphemeralResourceConfig(ctx context.Context, in *ValidateEphemeralResourceConfig_Request, opts ...grpc.CallOption) (*ValidateEphemeralResourceConfig_Response, error) {
 	out := new(ValidateEphemeralResourceConfig_Response)
 	err := c.cc.Invoke(ctx, Provider_ValidateEphemeralResourceConfig_FullMethodName, in, out, opts...)
@@ -349,6 +381,9 @@ type ProviderServer interface {
 	ImportResourceState(context.Context, *ImportResourceState_Request) (*ImportResourceState_Response, error)
 	MoveResourceState(context.Context, *MoveResourceState_Request) (*MoveResourceState_Response, error)
 	ReadDataSource(context.Context, *ReadDataSource_Request) (*ReadDataSource_Response, error)
+	// ////// List Resources (querying existing infrastructure)
+	ValidateListResourceConfig(context.Context, *ValidateListResourceConfig_Request) (*ValidateListResourceConfig_Response, error)
+	ListResource(context.Context, *ListResource_Request) (*ListResource_Response, error)
 	// ////// Ephemeral Resource Lifecycle
 	ValidateEphemeralResourceConfig(context.Context, *ValidateEphemeralResourceConfig_Request) (*ValidateEphemeralResourceConfig_Response, error)
 	OpenEphemeralResource(context.Context, *OpenEphemeralResource_Request) (*OpenEphemeralResource_Response, error)
@@ -412,6 +447,12 @@ func (UnimplementedProviderServer) MoveResourceState(context.Context, *MoveResou
 }
 func (UnimplementedProviderServer) ReadDataSource(context.Context, *ReadDataSource_Request) (*ReadDataSource_Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReadDataSource not implemented")
+}
+func (UnimplementedProviderServer) ValidateListResourceConfig(context.Context, *ValidateListResourceConfig_Request) (*ValidateListResourceConfig_Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ValidateListResourceConfig not implemented")
+}
+func (UnimplementedProviderServer) ListResource(context.Context, *ListResource_Request) (*ListResource_Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListResource not implemented")
 }
 func (UnimplementedProviderServer) ValidateEphemeralResourceConfig(context.Context, *ValidateEphemeralResourceConfig_Request) (*ValidateEphemeralResourceConfig_Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateEphemeralResourceConfig not implemented")
@@ -717,6 +758,42 @@ func _Provider_ReadDataSource_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Provider_ValidateListResourceConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateListResourceConfig_Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderServer).ValidateListResourceConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Provider_ValidateListResourceConfig_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderServer).ValidateListResourceConfig(ctx, req.(*ValidateListResourceConfig_Request))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Provider_ListResource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListResource_Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderServer).ListResource(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Provider_ListResource_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderServer).ListResource(ctx, req.(*ListResource_Request))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Provider_ValidateEphemeralResourceConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ValidateEphemeralResourceConfig_Request)
 	if err := dec(in); err != nil {
@@ -909,6 +986,14 @@ var Provider_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReadDataSource",
 			Handler:    _Provider_ReadDataSource_Handler,
+		},
+		{
+			MethodName: "ValidateListResourceConfig",
+			Handler:    _Provider_ValidateListResourceConfig_Handler,
+		},
+		{
+			MethodName: "ListResource",
+			Handler:    _Provider_ListResource_Handler,
 		},
 		{
 			MethodName: "ValidateEphemeralResourceConfig",
